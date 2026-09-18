@@ -1,128 +1,128 @@
 # ALM ground state — Anharmonic Larkin Model
 
-Solver exacto del estado fundamental del **Anharmonic Larkin Model (ALM)**,
-más un conjunto de herramientas para caracterizar su rugosidad estadística
-(exponente ζ) mediante el factor de estructura promediado sobre desorden.
+Exact ground-state solver for the **Anharmonic Larkin Model (ALM)**, plus a
+set of tools for characterizing its statistical roughness (exponent ζ) via
+the disorder-averaged structure factor.
 
-## El modelo
+## The model
 
-Interfaz elástica 1D `u_i` sometida a una fuerza de desorden aleatoria `f_i`
-(media nula), con energía
+1D elastic interface `u_i` subject to a random disorder force `f_i`
+(zero mean), with energy
 
 ```
 H[u] = sum_i [ (c/2) s_i^2 + (1/2n) |s_i|^(2n) - f_i u_i ],   s_i = u_{i+1} - u_i
 ```
 
-donde `c >= 0` es la constante elástica armónica y `n > 1` controla el término
-anarmónico (`n=2` da un término cuártico `|s|^4/4`). La condición de
-equilibrio de fuerzas es
+where `c >= 0` is the harmonic elastic constant and `n > 1` controls the
+anharmonic term (`n=2` gives a quartic term `|s|^4/4`). The force-balance
+condition is
 
 ```
 sigma_i - sigma_{i-1} = f_i,      sigma(s) = c*s + |s|^(2n-2) s
 ```
 
-Este modelo se resuelve **exactamente**: integrando la relación anterior, el
-problema de minimizar `H` en las `L` variables `u_i` se reduce a encontrar la
-raíz de una única función escalar `G(C)` (una constante de integración `C`).
-Una vez hallada esa raíz por bisección (`scipy.optimize.brentq`), las
-pendientes `s_i` se obtienen invirtiendo la relación constitutiva
-`sigma = s(sigma)` (analíticamente si `c=0`, con Newton salvaguardado si
-`c>0`), y la interfaz se reconstruye por suma acumulada.
+This model is solved **exactly**: integrating the relation above reduces
+the problem of minimizing `H` over the `L` variables `u_i` to finding the
+root of a single scalar function `G(C)` (an integration constant `C`).
+Once that root is found by bisection (`scipy.optimize.brentq`), the
+slopes `s_i` are obtained by inverting the constitutive relation
+`sigma = s(sigma)` (analytically if `c=0`, with safeguarded Newton if
+`c>0`), and the interface is reconstructed by cumulative sum.
 
-`alm.py` implementa esta construcción para dos condiciones de contorno:
+`alm.py` implements this construction for two boundary conditions:
 
-- **Periódicas** (`solve_ground_state`): requiere resolver la raíz escalar `C`
-  (hay un grado de libertad global). Se usa cuando se analiza la interfaz vía
-  FFT.
-- **Libres / abiertas** (`solve_ground_state_free`): las condiciones de borde
-  de tensión nula en los extremos fijan `C = 0` exactamente, sin necesidad de
-  búsqueda de raíz. Se usa junto con una DCT (en vez de una FFT) porque la
-  interfaz no es periódica.
+- **Periodic** (`solve_ground_state`): requires solving for the scalar
+  root `C` (there is one global degree of freedom). Used when the
+  interface is analyzed via FFT.
+- **Free / open** (`solve_ground_state_free`): the zero-stress boundary
+  conditions at the ends fix `C = 0` exactly, with no root search needed.
+  Used together with a DCT (instead of an FFT) since the interface is not
+  periodic.
 
-En ambos casos se exige desorden de media nula (`sum_i f_i = 0`), condición
-necesaria para que exista una configuración de equilibrio estático.
+In both cases zero-mean disorder is required (`sum_i f_i = 0`), a
+condition necessary for a static equilibrium configuration to exist at
+all.
 
-## Archivos
+## Files
 
-| Archivo | Qué hace |
+| File | What it does |
 |---|---|
-| `alm.py` | Núcleo del proyecto: genera el desorden (`sample_disorder`, con formas gaussiana/uniforme/bimodal, todas normalizadas a la misma varianza `Delta`) y resuelve el estado fundamental exacto (`solve_ground_state`, `solve_ground_state_free`). Los demás scripts importan estas funciones. Ejecutado directamente (`python3 alm.py`), corre una demo: genera una realización, resuelve el estado fundamental, verifica el balance de fuerzas y grafica `u_i`, `s_i` y `F_i`. |
-| `run_structure_factor.py` | Para un `(L, n, c, Delta)` dado, genera muchas realizaciones de desorden, resuelve el estado fundamental de cada una, y promedia el factor de estructura `S(q) = <|û(q)|^2>/L`. Ajusta por regresión log-log el exponente de rugosidad espectral `ζ_s` de `S(q) ~ q^{-(1+2ζ_s)}`, y valida el resultado calculando el ancho cuadrático `W²` de dos formas independientes (directo en espacio real, y vía el teorema de Parseval a partir de `S(q)`) — deben coincidir. |
-| `plot_illustrative_configs.py` | Genera una figura ilustrativa (no promediada) del perfil de altura y de pendiente normalizados, `[h(x)-h̄]/σ_h` y `m/σ_m`, para distintos valores de `p = 1/(2n-1)` (usa el caso puro `c=0`, donde `p` es el exponente de la relación constitutiva). Con `--bc periodic free` superpone ambas condiciones de contorno (misma realización de desorden por `p`, para comparar de forma directa). |
-| `plot_zeta_vs_n.py` | Lee un CSV producido por un barrido en `(bc, L, n)` (típicamente `scan_results.csv`, generado por `scan_sweep_bc.sh`), y grafica `ζ_s(n, L)` (del factor de estructura) junto con `ζ(n)` obtenido ajustando `W²(L) ~ L^{2ζ}` a través de los distintos tamaños `L`, comparando ambos contra curvas de teoría. Dibuja un panel por condición de contorno (periódica y libre) para poder compararlas lado a lado. |
-| `scan_sweep_bc.sh` | Script bash que barre varios valores de `n`, `L` y ambas condiciones de contorno (periódica y libre), llama a `run_structure_factor.py` para cada combinación, y junta los resultados en `scan_results.csv` (una fila por corrida, con `ζ_s`, `W²`, etc.). Es el generador del CSV que consume `plot_zeta_vs_n.py`. |
+| `alm.py` | Core of the project: generates disorder (`sample_disorder`, with gaussian/uniform/bimodal shapes, all normalized to the same variance `Delta`) and solves the exact ground state (`solve_ground_state`, `solve_ground_state_free`). The other scripts import these functions. Run directly (`python3 alm.py`), it runs a demo: generates one realization, solves the ground state, checks force balance, and plots `u_i`, `s_i` and `F_i`. |
+| `run_structure_factor.py` | For a given `(L, n, c, Delta)`, generates many disorder realizations, solves the ground state of each, and averages the structure factor `S(q) = <|û(q)|^2>/L`. Fits by log-log regression the spectral roughness exponent `ζ_s` from `S(q) ~ q^{-(1+2ζ_s)}`, and cross-checks the result by computing the mean-square width `W²` two independent ways (directly in real space, and via Parseval's theorem from `S(q)`) — they should agree. |
+| `plot_illustrative_configs.py` | Produces an illustrative (non-averaged) figure of the normalized height and slope profiles, `[h(x)-h̄]/σ_h` and `m/σ_m`, for different values of `p = 1/(2n-1)` (uses the pure case `c=0`, where `p` is the exponent of the constitutive relation). With `--bc periodic free` it overlays both boundary conditions (same disorder realization per `p`, for a direct comparison). |
+| `plot_zeta_vs_n.py` | Reads a CSV produced by a sweep over `(bc, L, n)` (typically `scan_results.csv`, generated by `scan_sweep_bc.sh`), and plots `ζ_s(n, L)` (from the structure factor) together with `ζ(n)` obtained by fitting `W²(L) ~ L^{2ζ}` across the different sizes `L`, comparing both against theory curves. Draws one panel per boundary condition (periodic and free) so they can be compared side by side. |
+| `scan_sweep_bc.sh` | Bash script that sweeps several values of `n`, `L` and both boundary conditions (periodic and free), calls `run_structure_factor.py` for each combination, and collects the results into `scan_results.csv` (one row per run, with `ζ_s`, `W²`, etc.). This is what generates the CSV consumed by `plot_zeta_vs_n.py`. |
 
-## Flujo de trabajo típico
+## Typical workflow
 
 ```
-alm.py  ──(genera configuraciones de estado fundamental)──▶
-    ├─▶ run_structure_factor.py   (análisis para un único (L,n): S(q), ζ_s, W²)
-    ├─▶ plot_illustrative_configs.py  (perfiles ilustrativos de u(x), s(x))
-    └─▶ scan_sweep_bc.sh  ──▶ scan_results.csv ──▶ plot_zeta_vs_n.py  (ζ(n) vs teoría)
+alm.py  ──(generates ground-state configurations)──▶
+    ├─▶ run_structure_factor.py   (analysis for a single (L,n): S(q), ζ_s, W²)
+    ├─▶ plot_illustrative_configs.py  (illustrative profiles of u(x), s(x))
+    └─▶ scan_sweep_bc.sh  ──▶ scan_results.csv ──▶ plot_zeta_vs_n.py  (ζ(n) vs theory)
 ```
 
-1. **Demo rápida / sanity check** del solver:
+1. **Quick demo / sanity check** of the solver:
    ```bash
    python3 alm.py
    ```
-   Genera una realización con `L=2000`, `c=1`, `n=2`, resuelve el estado
-   fundamental, imprime chequeos de consistencia (cierre periódico, balance
-   de fuerzas) y guarda `alm_ground_state.png`.
+   Generates one realization with `L=2000`, `c=1`, `n=2`, solves the ground
+   state, prints consistency checks (periodic closure, force balance) and
+   saves `alm_ground_state.png`.
 
-2. **Factor de estructura y exponente ζ_s** para un tamaño y anarmonicidad
-   dados:
+2. **Structure factor and exponent ζ_s** for a given size and anharmonicity:
    ```bash
    python3 run_structure_factor.py -L 8192 -n 2.0 --samples 300 --bc periodic
    python3 run_structure_factor.py -L 8192 -n 3.0 -c 1.0 --delta 1.0 --bc free
    ```
-   Opciones relevantes: `-L` tamaño del sistema, `-n` exponente anarmónico,
-   `-c` constante elástica, `--delta` varianza del desorden, `--samples`
-   número de realizaciones a promediar, `--dist {gaussian,uniform,bimodal}`,
-   `--bc {periodic,free}`, ventana de ajuste vía `--qfrac`/`--qmin`/`--qmax`/
-   `--kmin`/`--kmax`, `-o` archivo de salida del gráfico, `--csv` para volcar
-   `(q, S(q))`, `--no-plot`/`--no-show` para correr sin abrir ventana gráfica.
-   Al final imprime una línea `RESULT ...` con todos los valores clave, pensada
-   para ser parseada por scripts (es lo que hace `scan_sweep_bc.sh`).
+   Relevant options: `-L` system size, `-n` anharmonic exponent, `-c`
+   elastic constant, `--delta` disorder variance, `--samples` number of
+   realizations to average, `--dist {gaussian,uniform,bimodal}`,
+   `--bc {periodic,free}`, fit window via `--qfrac`/`--qmin`/`--qmax`/
+   `--kmin`/`--kmax`, `-o` output plot file, `--csv` to dump `(q, S(q))`,
+   `--no-plot`/`--no-show` to run without opening a graphics window. At the
+   end it prints a `RESULT ...` line with all the key values, meant to be
+   parsed by scripts (which is what `scan_sweep_bc.sh` does).
 
-3. **Configuraciones ilustrativas** para distintos `p = 1/(2n-1)`:
+3. **Illustrative configurations** for different `p = 1/(2n-1)`:
    ```bash
    python3 plot_illustrative_configs.py --p 0.2 4.0 -L 16384 --no-show
    ```
-   Por defecto usa condición de contorno periódica. Para comparar periódica
-   vs. libre (misma realización de desorden `f` en ambos casos, para que la
-   comparación no esté contaminada por ruido distinto):
+   By default it uses periodic boundary conditions. To compare periodic
+   vs. free (same disorder realization `f` in both cases, so the
+   comparison isn't confounded by different noise):
    ```bash
    python3 plot_illustrative_configs.py --p 0.2 4.0 -L 16384 --bc periodic free --no-show
    ```
-   En el layout por defecto (una columna de paneles por `p`), cada bc se
-   dibuja superpuesta en el mismo par de paneles (línea sólida = periódica,
-   punteada = libre). Con `--combined` se superponen además todos los `p` en
-   un único par de paneles (color = `p`, estilo de línea = bc) — útil para
-   una figura resumen con pocos elementos. Otras opciones: `-L` tamaño,
-   `--delta` varianza del desorden, `--seed`, `-o` archivo de salida.
+   In the default layout (one column of panels per `p`), each bc is drawn
+   overlaid on the same pair of panels (solid line = periodic, dashed =
+   free). With `--combined`, all `p` values are additionally overlaid on a
+   single pair of panels (color = `p`, line style = bc) — useful for a
+   summary figure with fewer elements. Other options: `-L` size, `--delta`
+   disorder variance, `--seed`, `-o` output file.
 
-4. **Barrido completo y comparación con teoría**:
+4. **Full sweep and comparison with theory**:
    ```bash
-   ./scan_sweep_bc.sh                       # genera scan_results.csv (barre ambas bc, puede tardar bastante)
+   ./scan_sweep_bc.sh                       # generates scan_results.csv (sweeps both bc, can take a while)
    python3 plot_zeta_vs_n.py --csv scan_results.csv --Lmin 8192 --no-show
    ```
-   Como `scan_sweep_bc.sh` barre tanto `bc=periodic` como `bc=free`,
-   `plot_zeta_vs_n.py` grafica automáticamente **un panel por condición de
-   contorno**, lado a lado, cada uno con sus propias curvas `ζ_s(n,L)` y el
-   ajuste `ζ(n)` de `W²(L)`. Para quedarse con una sola bc (un único panel):
+   Since `scan_sweep_bc.sh` sweeps both `bc=periodic` and `bc=free`,
+   `plot_zeta_vs_n.py` automatically plots **one panel per boundary
+   condition**, side by side, each with its own `ζ_s(n,L)` curves and the
+   `ζ(n)` fit from `W²(L)`. To keep only one bc (a single panel):
    ```bash
    python3 plot_zeta_vs_n.py --csv scan_results.csv --bc periodic --no-show
    ```
-   Otras opciones: `--xaxis {p,n}`, `--Lmin`/`--Lmax` para excluir tamaños
-   chicos del ajuste de tamaño finito, `--zeta-s-L` para mostrar `ζ_s` solo a
-   un tamaño fijo, y `--summary-csv` para guardar la tabla de `ζ(n)` ajustada
-   (incluye columna `bc` cuando hay más de una condición de contorno en el
+   Other options: `--xaxis {p,n}`, `--Lmin`/`--Lmax` to exclude small sizes
+   from the finite-size fit, `--zeta-s-L` to show `ζ_s` at only one fixed
+   size, and `--summary-csv` to save the fitted `ζ(n)` table (includes a
+   `bc` column when more than one boundary condition is present in the
    CSV).
 
-## Requisitos
+## Requirements
 
 ```bash
 pip install numpy scipy matplotlib pandas
 ```
 
-Python 3.8+ recomendado.
+Python 3.8+ recommended.
