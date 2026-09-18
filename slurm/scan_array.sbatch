@@ -17,7 +17,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --time=02:00:00
-#SBATCH --array=0-119
+#SBATCH --array=0-139
 #SBATCH --output=slurm/logs/%x_%A_%a.out
 #SBATCH --error=slurm/logs/%x_%A_%a.err
 
@@ -27,7 +27,7 @@ source "$SLURM_SUBMIT_DIR/slurm/common.sh"
 # ---- sweep grid: must match scan_sweep_bc.sh -------------------------
 BCS=(periodic free)
 NS=(0.8 0.85 0.9 1.0 1.1 1.3 1.5 2.0 3.0 4.0)
-LS=(2048 8192 32768 131072 524288 1048576)
+LS=(2048 8192 32768 131072 524288 1048576 2097152)
 NSAMPLES=1000
 # ------------------------------------------------------------------------
 

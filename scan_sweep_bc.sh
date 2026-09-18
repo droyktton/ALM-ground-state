@@ -7,7 +7,7 @@ echo "bc,L,n,c,delta,samples,zeta_s,zeta_s_err,W2_direct,W2_parseval" > "$OUTFIL
 
 for bc in periodic free; do
     for n in 0.8 0.85 0.9 1.0 1.1 1.3 1.5 2.0 3.0 4.0; do
-        for L in 2048 8192 32768 131072 524288 1048576; do
+        for L in 2048 8192 32768 131072 524288 1048576 2097152; do
             #nsamples=$(echo "1024*32768/$L" | bc)  # Number of samples to average over for each (L,n) pair
             nsamples=1000
 
