@@ -164,6 +164,13 @@ def main():
     args = parser.parse_args()
 
     df = pd.read_csv(args.csv)
+    # W2_direct/W2_parseval can reach huge magnitudes for large L / low n
+    # (zeta close to ~1.85 makes W2 ~ L^3.7). Written in long fixed-point
+    # notation, pandas' C parser sometimes leaves the whole column as
+    # strings instead of inferring float64 -- force it explicitly.
+    for col in ("W2_direct", "W2_parseval"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col])
 
     has_bc = "bc" in df.columns
     if has_bc and args.bc != "both":

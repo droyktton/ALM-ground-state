@@ -45,7 +45,7 @@ sbatch slurm/submit_single.sbatch -L 65536 -n 2.0 -c 1.0 --samples 500 \
 
 # 2. full sweep, in parallel instead of scan_sweep_bc.sh's serial loop
 sbatch slurm/scan_array.sbatch
-squeue -u $USER                     # wait for all 60 array tasks to finish
+squeue -u $USER                     # wait for all 120 array tasks to finish
 slurm/merge_scan_results.sh         # -> scan_results.csv at repo root
 
 # 3. back on the frontend (or wherever you have pandas):
