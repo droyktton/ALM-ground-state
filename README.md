@@ -48,8 +48,8 @@ necesaria para que exista una configuración de equilibrio estático.
 |---|---|
 | `alm.py` | Núcleo del proyecto: genera el desorden (`sample_disorder`, con formas gaussiana/uniforme/bimodal, todas normalizadas a la misma varianza `Delta`) y resuelve el estado fundamental exacto (`solve_ground_state`, `solve_ground_state_free`). Los demás scripts importan estas funciones. Ejecutado directamente (`python3 alm.py`), corre una demo: genera una realización, resuelve el estado fundamental, verifica el balance de fuerzas y grafica `u_i`, `s_i` y `F_i`. |
 | `run_structure_factor.py` | Para un `(L, n, c, Delta)` dado, genera muchas realizaciones de desorden, resuelve el estado fundamental de cada una, y promedia el factor de estructura `S(q) = <|û(q)|^2>/L`. Ajusta por regresión log-log el exponente de rugosidad espectral `ζ_s` de `S(q) ~ q^{-(1+2ζ_s)}`, y valida el resultado calculando el ancho cuadrático `W²` de dos formas independientes (directo en espacio real, y vía el teorema de Parseval a partir de `S(q)`) — deben coincidir. |
-| `plot_illustrative_configs.py` | Genera una figura ilustrativa (no promediada) del perfil de altura y de pendiente normalizados, `[h(x)-h̄]/σ_h` y `m/σ_m`, para distintos valores de `p = 1/(2n-1)` (usa el caso puro `c=0`, donde `p` es el exponente de la relación constitutiva). |
-| `plot_zeta_vs_n.py` | Lee un CSV producido por un barrido en `(L, n)` (típicamente `scan_results.csv`, generado por `scan_sweep_bc.sh`), y grafica `ζ_s(n, L)` (del factor de estructura) junto con `ζ(n)` obtenido ajustando `W²(L) ~ L^{2ζ}` a través de los distintos tamaños `L`, comparando ambos contra curvas de teoría. |
+| `plot_illustrative_configs.py` | Genera una figura ilustrativa (no promediada) del perfil de altura y de pendiente normalizados, `[h(x)-h̄]/σ_h` y `m/σ_m`, para distintos valores de `p = 1/(2n-1)` (usa el caso puro `c=0`, donde `p` es el exponente de la relación constitutiva). Con `--bc periodic free` superpone ambas condiciones de contorno (misma realización de desorden por `p`, para comparar de forma directa). |
+| `plot_zeta_vs_n.py` | Lee un CSV producido por un barrido en `(bc, L, n)` (típicamente `scan_results.csv`, generado por `scan_sweep_bc.sh`), y grafica `ζ_s(n, L)` (del factor de estructura) junto con `ζ(n)` obtenido ajustando `W²(L) ~ L^{2ζ}` a través de los distintos tamaños `L`, comparando ambos contra curvas de teoría. Dibuja un panel por condición de contorno (periódica y libre) para poder compararlas lado a lado. |
 | `scan_sweep_bc.sh` | Script bash que barre varios valores de `n`, `L` y ambas condiciones de contorno (periódica y libre), llama a `run_structure_factor.py` para cada combinación, y junta los resultados en `scan_results.csv` (una fila por corrida, con `ζ_s`, `W²`, etc.). Es el generador del CSV que consume `plot_zeta_vs_n.py`. |
 
 ## Flujo de trabajo típico
@@ -88,16 +88,36 @@ alm.py  ──(genera configuraciones de estado fundamental)──▶
    ```bash
    python3 plot_illustrative_configs.py --p 0.2 4.0 -L 16384 --no-show
    ```
+   Por defecto usa condición de contorno periódica. Para comparar periódica
+   vs. libre (misma realización de desorden `f` en ambos casos, para que la
+   comparación no esté contaminada por ruido distinto):
+   ```bash
+   python3 plot_illustrative_configs.py --p 0.2 4.0 -L 16384 --bc periodic free --no-show
+   ```
+   En el layout por defecto (una columna de paneles por `p`), cada bc se
+   dibuja superpuesta en el mismo par de paneles (línea sólida = periódica,
+   punteada = libre). Con `--combined` se superponen además todos los `p` en
+   un único par de paneles (color = `p`, estilo de línea = bc) — útil para
+   una figura resumen con pocos elementos. Otras opciones: `-L` tamaño,
+   `--delta` varianza del desorden, `--seed`, `-o` archivo de salida.
 
 4. **Barrido completo y comparación con teoría**:
    ```bash
-   ./scan_sweep_bc.sh                       # genera scan_results.csv (puede tardar bastante)
+   ./scan_sweep_bc.sh                       # genera scan_results.csv (barre ambas bc, puede tardar bastante)
    python3 plot_zeta_vs_n.py --csv scan_results.csv --Lmin 8192 --no-show
    ```
-   `plot_zeta_vs_n.py` acepta `--xaxis {p,n}`, `--Lmin`/`--Lmax` para excluir
-   tamaños chicos del ajuste de tamaño finito, `--zeta-s-L` para mostrar
-   `ζ_s` solo a un tamaño fijo, y `--summary-csv` para guardar la tabla de
-   `ζ(n)` ajustada.
+   Como `scan_sweep_bc.sh` barre tanto `bc=periodic` como `bc=free`,
+   `plot_zeta_vs_n.py` grafica automáticamente **un panel por condición de
+   contorno**, lado a lado, cada uno con sus propias curvas `ζ_s(n,L)` y el
+   ajuste `ζ(n)` de `W²(L)`. Para quedarse con una sola bc (un único panel):
+   ```bash
+   python3 plot_zeta_vs_n.py --csv scan_results.csv --bc periodic --no-show
+   ```
+   Otras opciones: `--xaxis {p,n}`, `--Lmin`/`--Lmax` para excluir tamaños
+   chicos del ajuste de tamaño finito, `--zeta-s-L` para mostrar `ζ_s` solo a
+   un tamaño fijo, y `--summary-csv` para guardar la tabla de `ζ(n)` ajustada
+   (incluye columna `bc` cuando hay más de una condición de contorno en el
+   CSV).
 
 ## Requisitos
 
