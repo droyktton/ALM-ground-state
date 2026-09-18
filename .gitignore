@@ -6,3 +6,9 @@ __pycache__/
 scan_results.csv
 sf_L*.png
 scan_*.sofq.png
+
+# slurm job outputs
+slurm/logs/*
+!slurm/logs/.gitkeep
+slurm/results/*
+!slurm/results/.gitkeep
