@@ -136,34 +136,42 @@ def fit_zeta_s(q, S, q_frac_max=0.15, q_min=None, q_max=None, kmin=None, kmax=No
     """
     Fit S(q) ~ q^{-(1+2*zeta_s)} via log-log linear regression.
 
-    The fit window can be specified three ways (checked in this priority
-    order):
-      1. kmin/kmax   : explicit mode-index bounds (1-based, inclusive of kmin,
-                        exclusive of kmax+1) -- use this to hold a *fixed
-                        absolute q-window* across different L, for finite-size
-                        scans (q = 2*pi*k/L, so fixing k bounds while L varies
-                        actually changes the physical q-window -- to fix the
-                        physical window across L, use q_min/q_max instead).
-      2. q_min/q_max : explicit absolute q bounds -- the natural choice for
-                        finite-size scans: pick one physical q-window and use
-                        the *same* q_min, q_max regardless of L.
-      3. q_frac_max  : (default/back-compat) fraction of the L//2 available
-                        modes, starting from k=1. Note the resulting q_max is
-                        ~ pi * q_frac_max, independent of L, but q_min is
-                        always 2*pi/L -- i.e. this does NOT hold a fixed
-                        window across L on the IR side.
+    The lower and upper fit-window bounds are each resolved independently,
+    so kmin/kmax and q_min/q_max can be mixed (e.g. kmin=2, q_max=0.15):
+      - lower bound: kmin (mode index, 1-based) if given, else q_min
+                     (absolute q), else 0 (start from k=1).
+      - upper bound: kmax (mode index, inclusive) if given, else q_max
+                     (absolute q), else -- only if NO bound (kmin/kmax/
+                     q_min/q_max) was given at all -- q_frac_max fraction
+                     of the L//2 available modes; otherwise open (len(q)).
+
+    Fixing k bounds holds a fixed *mode-index* window across different L,
+    which is NOT the same physical q-window since q = 2*pi*k/L. Fixing
+    q_min/q_max instead holds the same physical window across L, which is
+    what finite-size scans normally want. q_frac_max is the old
+    default/back-compat behavior (resulting q_max ~ pi * q_frac_max,
+    independent of L, but q_min always 2*pi/L -- i.e. it does NOT hold a
+    fixed window across L on the IR side).
 
     Returns zeta_s, its standard error, the full regression result, and the
     (idx_min, idx_max) slice actually used (for plotting / bookkeeping).
     """
-    if kmin is not None or kmax is not None:
-        idx_min = 0 if kmin is None else (kmin - 1)
-        idx_max = len(q) if kmax is None else kmax
-    elif q_min is not None or q_max is not None:
-        idx_min = 0 if q_min is None else int(np.searchsorted(q, q_min, side="left"))
-        idx_max = len(q) if q_max is None else int(np.searchsorted(q, q_max, side="right"))
+    any_bound_given = any(x is not None for x in (kmin, kmax, q_min, q_max))
+
+    if kmin is not None:
+        idx_min = kmin - 1
+    elif q_min is not None:
+        idx_min = int(np.searchsorted(q, q_min, side="left"))
     else:
         idx_min = 0
+
+    if kmax is not None:
+        idx_max = kmax
+    elif q_max is not None:
+        idx_max = int(np.searchsorted(q, q_max, side="right"))
+    elif any_bound_given:
+        idx_max = len(q)
+    else:
         idx_max = max(4, int(len(q) * q_frac_max))
 
     idx_min = max(0, idx_min)
@@ -201,20 +209,24 @@ def main():
                         help="Number of disorder realizations to average over (default: 200).")
     parser.add_argument("--qfrac", type=float, default=0.15,
                         help="Fraction of low-q modes used for the power-law fit "
-                             "(default: 0.15). Ignored if --qmin/--qmax or "
+                             "(default: 0.15). Only used if NONE of --qmin/--qmax/"
                              "--kmin/--kmax are given.")
     parser.add_argument("--qmin", type=float, default=None,
                         help="Absolute lower bound of the fit window in q. "
                              "Use together with --qmax to fix the SAME physical "
                              "q-window across different L (recommended for "
-                             "finite-size scans).")
+                             "finite-size scans). Ignored if --kmin is given.")
     parser.add_argument("--qmax", type=float, default=None,
-                        help="Absolute upper bound of the fit window in q.")
+                        help="Absolute upper bound of the fit window in q. "
+                             "Ignored if --kmax is given.")
     parser.add_argument("--kmin", type=int, default=None,
                         help="Mode-index lower bound (1-based) of the fit window. "
-                             "Overrides --qmin/--qmax/--qfrac if given.")
+                             "Overrides --qmin if given; can be combined with "
+                             "--qmax (each bound is resolved independently).")
     parser.add_argument("--kmax", type=int, default=None,
-                        help="Mode-index upper bound (inclusive) of the fit window.")
+                        help="Mode-index upper bound (inclusive) of the fit window. "
+                             "Overrides --qmax if given; can be combined with "
+                             "--qmin (each bound is resolved independently).")
     parser.add_argument("--seed", type=int, default=0,
                         help="Random seed (default: 0).")
     parser.add_argument("--dist", type=str, choices=["gaussian", "uniform", "bimodal"],
