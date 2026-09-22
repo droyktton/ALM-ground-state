@@ -8,17 +8,19 @@
 # slurm/scan_array_periodic.sbatch for the CPU/periodic counterpart; run
 # both jobs and merge_scan_results.sh combines their output.
 #
-# ***UNVERIFIED ON THE CLUSTER*** -- this was written from a workstation,
-# not frontend.fisica.cabib, so the following need checking before/at first
-# submission:
-#   - `--gres=gpu:1` below: confirm the actual GRES name with
-#     `scontrol show partition gpu` (some clusters use gpu:a100:1 etc.).
-#   - The `cupy_env` conda env must exist on the cluster (it only exists on
-#     this workstation right now) with a cupy build matching the GPU
-#     node's CUDA driver -- check via `nvidia-smi` on a gpu-partition node,
-#     then `pip install cupy-cudaXXx` to match. See slurm/setup_env.sh for
-#     the analogous one-off CPU-env setup pattern.
+# Verified on frontend.fisica.cabib: `--gres=gpu:1` is accepted (gpu
+# partition nodes carry mixed GRES types -- rtx3080/rtx3080ti/a10/rtx5070ti
+# -- but the generic `gpu:1` request matches any of them) and `alm_env`
+# already has a working cupy (14.0.1) that sees the device -- no separate
+# cupy_env needed here, so common.sh's default env is used as-is.
 #
+# --gpu-mem-budget-mb default lowered to 400 (from run_structure_factor.py's
+# own default of 1500): the gpu partition's OverSubscribe=YES:4 means several
+# array tasks can land on the same physical GPU at once, and 1500MB/task
+# OOM'd ~31% of a first 70-task run (mostly at large L) under that
+# contention; 400MB/task re-ran all of them cleanly. Override with
+# ALM_GPU_MEM_MB=<mb> if the partition is emptier and you want more headroom
+# per task.
 # Grid below must match scan_sweep_bc.sh (NS x LS). Edit both the arrays
 # and #SBATCH --array to match if you change the sweep.
 #
@@ -40,7 +42,6 @@
 #SBATCH --error=slurm/logs/%x_%A_%a.err
 
 set -euo pipefail
-export ALM_CONDA_ENV=cupy_env
 source "$SLURM_SUBMIT_DIR/slurm/common.sh"
 
 # ---- sweep grid: must match scan_sweep_bc.sh --------------------------
@@ -78,7 +79,8 @@ mkdir -p slurm/results
 result_file="slurm/results/result_${bc}_L${L}_n${n}.csv"
 
 output=$(python3 run_structure_factor.py -L "$L" -n "$n" --samples "$NSAMPLES" \
-    --kmin 2 --kmax 100 -c 0.0 --bc "$bc" --gpu --no-plot)
+    --qmin 0.015 --qmax 0.15 -c 0.0 --bc "$bc" --gpu \
+    --gpu-mem-budget-mb "${ALM_GPU_MEM_MB:-400}" --no-plot)
 echo "$output"
 
 result_line=$(echo "$output" | grep "^RESULT")

@@ -1,9 +1,10 @@
 # Slurm scripts
 
 Cluster: `frontend.fisica.cabib`. Detected setup (checked from this frontend,
-**except the `gpu`-partition / `cupy_env` details below, which have NOT been
-verified on the actual cluster** — see the warning in
-`scan_array_free.sbatch`):
+including the `gpu` partition -- confirmed by an actual job on `node210`:
+`--gres=gpu:1` schedules fine against the partition's mixed GRES types, and
+`alm_env` already has a working cupy 14.0.1 that sees the device, so no
+separate `cupy_env` is needed):
 
 - Partitions: `cpu` (default, 2 nodes × 56 cores), `knl_tacc` (144 nodes ×
   272 cores, Knights Landing — much bigger, use it for very large sweeps),
@@ -25,25 +26,23 @@ verified on the actual cluster** — see the warning in
   plotting script you'd typically run on the frontend after merging results,
   not inside a job. If you do want to run it (or anything else needing
   pandas) via Slurm, run `slurm/setup_env.sh` once first.
-- `cupy_env` (needed for `--gpu` / `scan_array_free.sbatch`) only exists on
-  a workstation so far, **not confirmed to exist on the cluster**. Before
-  first use, on a `gpu`-partition node: check the CUDA driver version with
-  `nvidia-smi`, then `conda create -n cupy_env python=3.10 && conda activate
-  cupy_env && pip install cupy-cudaXXx` (XX matching that driver, e.g.
-  `cupy-cuda12x`), mirroring what `slurm/setup_env.sh` does for `alm_env`.
-  Also confirm the actual GRES name with `scontrol show partition gpu` —
-  `scan_array_free.sbatch` currently assumes `--gres=gpu:1`.
+- `--gpu` / `scan_array_free.sbatch` run in the plain `alm_env` (no
+  `cupy_env`): confirmed via a test job that `alm_env`'s cupy sees the GPU
+  (`node210`, RTX 3080). `gpu`-partition nodes carry mixed GRES types
+  (`rtx3080`/`rtx3080ti`/`a10`/`rtx5070ti`), but the generic `--gres=gpu:1`
+  in `scan_array_free.sbatch` matches any of them, so no per-node type
+  pinning is needed.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `common.sh` | Sourced by every sbatch script: `cd`s to the repo root and activates `$ALM_CONDA_ENV` (default `alm_env`; GPU scripts set this to `cupy_env`). Edit here if an env name/location ever changes. |
+| `common.sh` | Sourced by every sbatch script: `cd`s to the repo root and activates `$ALM_CONDA_ENV` (default, and only env needed here: `alm_env`). Edit here if an env name/location ever changes. |
 | `setup_env.sh` | Run once from the frontend to make sure `alm_env` has numpy/scipy/matplotlib/pandas. Safe to re-run. |
 | `submit_demo.sbatch` | Sanity-check job: runs `alm.py`'s built-in demo. Use this first to confirm the env/partition setup works. |
-| `submit_single.sbatch` | Runs one `run_structure_factor.py` call; all args after the script path are forwarded to it. CPU-only as written (`--partition=cpu`, `alm_env`) — pass `--bc free --gpu` only if you also adapt its partition/gres and `ALM_CONDA_ENV` the way `scan_array_free.sbatch` does. |
-| `scan_array_periodic.sbatch` | Array-job replacement for the `bc=periodic` half of `scan_sweep_bc.sh`: one `(n, L)` combination per task, on `cpu`. Each task writes its own CSV row into `slurm/results/`. |
-| `scan_array_free.sbatch` | Same, for the `bc=free` half, on `gpu` (`--gres=gpu:1`, `cupy_env`, `run_structure_factor.py --gpu`). **Unverified on the cluster — read the warning at the top of the file before first submission.** |
+| `submit_single.sbatch` | Runs one `run_structure_factor.py` call; all args after the script path are forwarded to it. CPU-only as written (`--partition=cpu`) — pass `--bc free --gpu` only if you also adapt its partition/gres the way `scan_array_free.sbatch` does. |
+| `scan_array_periodic.sbatch` | Array-job replacement for the `bc=periodic` half of `scan_sweep_bc.sh`: one `(n, L)` combination per task, on `cpu` (override `--partition` at submit time if `cpu` is drained). Each task writes its own CSV row into `slurm/results/`. |
+| `scan_array_free.sbatch` | Same, for the `bc=free` half, on `gpu` (`--gres=gpu:1`, `run_structure_factor.py --gpu`, `alm_env`). |
 | `merge_scan_results.sh` | Run after both array jobs finish: concatenates the per-task CSVs in `slurm/results/` into a single `scan_results.csv` at the repo root, ready for `plot_zeta_vs_n.py`. |
 | `logs/` | `.out`/`.err` files land here (`%x_%j` for single jobs, `%x_%A_%a` for array tasks). Gitignored except for `.gitkeep`. |
 | `results/` | Per-task CSV rows from the array jobs, merged by `merge_scan_results.sh`. Gitignored except for `.gitkeep`. |
