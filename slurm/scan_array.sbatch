@@ -11,12 +11,16 @@
 #   # then, once all tasks finish:
 #   slurm/merge_scan_results.sh
 #
+# Partition: gpu, not because this code uses a GPU (it's pure CPU/numpy --
+# see slurm/README.md), but because it's the only partition with real idle
+# capacity right now (cpu is drained, knl_tacc is saturated by other jobs).
+#
 #SBATCH --job-name=alm_scan
-#SBATCH --partition=cpu
+#SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --time=02:00:00
+#SBATCH --time=03:00:00
 #SBATCH --array=0-139
 #SBATCH --output=slurm/logs/%x_%A_%a.out
 #SBATCH --error=slurm/logs/%x_%A_%a.err
@@ -62,7 +66,7 @@ mkdir -p slurm/results
 result_file="slurm/results/result_${bc}_L${L}_n${n}.csv"
 
 output=$(python3 run_structure_factor.py -L "$L" -n "$n" --samples "$NSAMPLES" \
-    --kmin 2 --kmax 100 -c 0.0 --bc "$bc" --no-plot)
+    --qmin 0.015 --qmax 0.15 -c 0.0 --bc "$bc" --no-plot)
 echo "$output"
 
 result_line=$(echo "$output" | grep "^RESULT")

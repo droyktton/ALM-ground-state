@@ -13,9 +13,11 @@ for bc in periodic free; do
 
             SOFQPNG="scan_${bc}_L${L}_n${n}.sofq.png"
 
-            # Run the tool, capture full stdout, skip plotting/showing to keep it fast
-            #output=$(python3 run_structure_factor.py -L "$L" -n "$n" --samples $nsamples --qmin 0.015 --qmax 0.15 -c 0.0 --bc $bc --no-plot)
-            output=$(python3 run_structure_factor.py -L "$L" -n "$n" --samples $nsamples --kmin 2 --kmax 100 -c 0.0 --bc $bc --no-plot -o $SOFQPNG)
+            # Run the tool, capture full stdout, skip plotting/showing to keep it fast.
+            # Fixed physical q-window (same qmin/qmax for every L), so the fit
+            # avoids both the small-q boundary/finite-size region and the
+            # large-q small-scale/lattice crossover, independent of L.
+            output=$(python3 run_structure_factor.py -L "$L" -n "$n" --samples $nsamples --qmin 0.015 --qmax 0.15 -c 0.0 --bc $bc --no-plot -o $SOFQPNG)
 
             # Grab the single machine-readable line and turn it into a CSV row.
             # The RESULT line looks like:
