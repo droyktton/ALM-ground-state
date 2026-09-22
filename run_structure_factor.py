@@ -28,9 +28,11 @@ from scipy.stats import linregress
 from scipy.fft import dct
 
 from alm import solve_ground_state, solve_ground_state_free, sample_disorder
+from gpu_free import HAVE_CUPY, structure_factor_free_gpu, gpu_device_name
 
 
-def structure_factor_average(L, c, n, Delta, n_samples, rng, dist="gaussian", bc="periodic"):
+def structure_factor_average(L, c, n, Delta, n_samples, rng, dist="gaussian", bc="periodic",
+                              gpu=False, gpu_mem_budget_bytes=1.5e9):
     """
     Returns
     -------
@@ -49,7 +51,17 @@ def structure_factor_average(L, c, n, Delta, n_samples, rng, dist="gaussian", bc
     FFT would introduce a spurious boundary discontinuity that contaminates
     the low-q power-law fit (Fourier power of a jump decays only as q^-2,
     which can dominate the genuine small-q behavior for zeta > 0.5).
+
+    gpu=True only applies to bc="free" (see gpu_free.py for why: bc="periodic"
+    needs a scalar brentq root search per sample that hasn't been GPU-ported).
+    It dispatches to gpu_free.structure_factor_free_gpu, which batches all
+    n_samples realizations into 2D array ops on the GPU instead of looping
+    per-sample in Python, processed in gpu_mem_budget_bytes-sized chunks.
     """
+    if bc == "free" and gpu:
+        return structure_factor_free_gpu(L, c, n, Delta, n_samples, rng, dist=dist,
+                                          mem_budget_bytes=gpu_mem_budget_bytes)
+
     if bc == "periodic":
         S_accum = np.zeros(L // 2)
         W2_accum = 0.0
@@ -221,22 +233,46 @@ def main():
                         help="Save the plot to file without opening a display window.")
     parser.add_argument("--csv", type=str, default=None,
                         help="Optional path to also dump the raw (q, S(q)) data as CSV.")
+    parser.add_argument("--gpu", action="store_true",
+                        help="Use a batched cupy/GPU implementation instead of the "
+                             "per-sample numpy loop. Only supported for --bc free "
+                             "(periodic BC needs a per-sample scalar root search "
+                             "that hasn't been GPU-ported); requires cupy.")
+    parser.add_argument("--gpu-mem-budget-mb", type=float, default=1500,
+                        help="Approximate GPU memory (MB) to use per batch chunk "
+                             "when --gpu is set (default: 1500). Lower this if you "
+                             "hit out-of-memory errors on a smaller GPU.")
     args = parser.parse_args()
 
     if args.L % 2 != 0:
         print("Warning: L is odd; even L is recommended for a clean rfft/DCT spectrum.",
               file=sys.stderr)
 
+    if args.gpu:
+        if args.bc != "free":
+            print("Error: --gpu is only supported with --bc free (periodic BC "
+                  "needs a per-sample scalar brentq root search that hasn't been "
+                  "GPU-ported).", file=sys.stderr)
+            sys.exit(1)
+        if not HAVE_CUPY:
+            print("Error: --gpu was given but cupy is not importable in this "
+                  "environment. Run in an environment with cupy installed "
+                  "(e.g. the 'cupy_env' conda env), or drop --gpu.", file=sys.stderr)
+            sys.exit(1)
+
     out_path = args.output or f"sf_L{args.L}_n{args.n}.png"
 
     rng = np.random.default_rng(args.seed)
 
+    device_str = f"gpu ({gpu_device_name()})" if args.gpu else "cpu"
     print(f"Averaging structure factor over {args.samples} samples "
           f"(L={args.L}, c={args.c}, n={args.n}, Delta={args.delta}, "
-          f"dist={args.dist}, bc={args.bc}) ...")
+          f"dist={args.dist}, bc={args.bc}, device={device_str}) ...")
     t0 = time.time()
     q, S, W2_direct = structure_factor_average(args.L, args.c, args.n, args.delta, args.samples,
-                                                rng, dist=args.dist, bc=args.bc)
+                                                rng, dist=args.dist, bc=args.bc,
+                                                gpu=args.gpu,
+                                                gpu_mem_budget_bytes=args.gpu_mem_budget_mb * 1e6)
     print(f"done in {time.time() - t0:.2f} s")
 
     zeta_s, zeta_s_err, res, (idx_min, idx_max) = fit_zeta_s(
@@ -260,6 +296,7 @@ def main():
     # Format: key=value pairs, space-separated, no spaces within a value.
     print(f"RESULT L={args.L} n={args.n} c={args.c} delta={args.delta} "
           f"samples={args.samples} dist={args.dist} bc={args.bc} "
+          f"device={'gpu' if args.gpu else 'cpu'} "
           f"zeta_s={zeta_s:.6f} zeta_s_err={zeta_s_err:.6f} "
           f"W2_direct={W2_direct:.6f} W2_parseval={W2_parseval:.6f} "
           f"qmin_fit={q[idx_min]:.6g} qmax_fit={q[idx_max - 1]:.6g} "

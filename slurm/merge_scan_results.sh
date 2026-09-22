@@ -1,8 +1,9 @@
 #!/bin/bash
-# Merge the per-task CSV rows written by scan_array.sbatch (one file per
-# (bc, n, L) combination in slurm/results/) into a single scan_results.csv,
-# in the same format plot_zeta_vs_n.py expects. Run this after all array
-# tasks have finished (check with `squeue -u $USER` or `sacct`).
+# Merge the per-task CSV rows written by scan_array_periodic.sbatch and
+# scan_array_free.sbatch (one file per (bc, n, L) combination in
+# slurm/results/) into a single scan_results.csv, in the same format
+# plot_zeta_vs_n.py expects. Run this after all array tasks from BOTH jobs
+# have finished (check with `squeue -u $USER` or `sacct`).
 #
 # Usage:
 #   slurm/merge_scan_results.sh [output_csv]   # default: scan_results.csv
@@ -17,7 +18,7 @@ RESULTS_DIR="slurm/results"
 shopt -s nullglob
 files=("$RESULTS_DIR"/result_*.csv)
 if (( ${#files[@]} == 0 )); then
-    echo "No result files found in $RESULTS_DIR/ -- has scan_array.sbatch finished?" >&2
+    echo "No result files found in $RESULTS_DIR/ -- have scan_array_periodic.sbatch / scan_array_free.sbatch finished?" >&2
     exit 1
 fi
 
