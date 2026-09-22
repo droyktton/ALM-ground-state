@@ -1,44 +1,51 @@
 #!/bin/bash
-# Array-job version of scan_sweep_bc.sh: instead of looping over
-# bc x n x L serially on one node, each array task runs exactly ONE
-# (bc, n, L) combination of run_structure_factor.py in parallel.
+# Array-job replacement for the bc=periodic half of scan_sweep_bc.sh: each
+# array task runs exactly ONE (n, L) combination of run_structure_factor.py
+# --bc periodic in parallel, on the CPU partition.
 #
-# Grid below must match scan_sweep_bc.sh (BCS x NS x LS). Edit both the
-# arrays and #SBATCH --array to match if you change the sweep.
+# bc=periodic needs a per-sample scalar brentq root search, which has no
+# GPU implementation -- see gpu_free.py and slurm/scan_array_free.sbatch
+# (the bc=free counterpart, which DOES run on GPU). A single sbatch script
+# can't mix partitions/gres across array tasks, so periodic and free are
+# submitted as two separate jobs; merge_scan_results.sh combines both
+# jobs' output afterwards.
+#
+# Grid below must match scan_sweep_bc.sh (NS x LS). Edit both the arrays
+# and #SBATCH --array to match if you change the sweep.
 #
 # Usage:
-#   sbatch slurm/scan_array.sbatch
-#   # then, once all tasks finish:
+#   sbatch slurm/scan_array_periodic.sbatch
+#   sbatch slurm/scan_array_free.sbatch
+#   # then, once both have finished:
 #   slurm/merge_scan_results.sh
 #
-# Partition: gpu, not because this code uses a GPU (it's pure CPU/numpy --
-# see slurm/README.md), but because it's the only partition with real idle
-# capacity right now (cpu is drained, knl_tacc is saturated by other jobs).
+# Partition: cpu is the natural fit (no GPU path for periodic either way),
+# but check `sinfo -p cpu` first -- if its nodes are drained/down, override
+# at submit time instead of editing this file, e.g.:
+#   sbatch --partition=gpu slurm/scan_array_periodic.sbatch
 #
-#SBATCH --job-name=alm_scan
-#SBATCH --partition=gpu
+#SBATCH --job-name=alm_scan_periodic
+#SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --time=03:00:00
-#SBATCH --array=0-139
+#SBATCH --time=02:00:00
+#SBATCH --array=0-69
 #SBATCH --output=slurm/logs/%x_%A_%a.out
 #SBATCH --error=slurm/logs/%x_%A_%a.err
 
 set -euo pipefail
 source "$SLURM_SUBMIT_DIR/slurm/common.sh"
 
-# ---- sweep grid: must match scan_sweep_bc.sh -------------------------
-BCS=(periodic free)
+# ---- sweep grid: must match scan_sweep_bc.sh --------------------------
 NS=(0.8 0.85 0.9 1.0 1.1 1.3 1.5 2.0 3.0 4.0)
 LS=(2048 8192 32768 131072 524288 1048576 2097152)
 NSAMPLES=1000
 # ------------------------------------------------------------------------
 
-NBC=${#BCS[@]}
 NN=${#NS[@]}
 NL=${#LS[@]}
-NTOTAL=$((NBC * NN * NL))
+NTOTAL=$((NN * NL))
 
 if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
     echo "This script must be submitted as an array job (see --array above)." >&2
@@ -49,16 +56,15 @@ if (( SLURM_ARRAY_TASK_ID >= NTOTAL )); then
     exit 1
 fi
 
-# Decode task id -> (bc, n, L). Must stay consistent with merge_scan_results.sh
+# Decode task id -> (n, L). Must stay consistent with merge_scan_results.sh
 # only via the CSV files it reads, not this indexing, so it's safe to edit.
 idx=$SLURM_ARRAY_TASK_ID
 li=$(( idx % NL )); idx=$(( idx / NL ))
-ni=$(( idx % NN )); idx=$(( idx / NN ))
-bi=$(( idx % NBC ))
+ni=$(( idx % NN ))
 
-bc=${BCS[$bi]}
 n=${NS[$ni]}
 L=${LS[$li]}
+bc=periodic
 
 echo "task $SLURM_ARRAY_TASK_ID -> bc=$bc n=$n L=$L samples=$NSAMPLES"
 

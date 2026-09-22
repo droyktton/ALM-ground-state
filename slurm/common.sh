@@ -3,6 +3,10 @@
 # jobs work no matter which directory `sbatch` was invoked from) and
 # activates the conda environment used for this project.
 #
+# Activates $ALM_CONDA_ENV (default: alm_env). GPU sbatch scripts set
+# ALM_CONDA_ENV=cupy_env before sourcing this, since the GPU path needs
+# cupy, which isn't (and shouldn't be) in the plain CPU env.
+#
 # EDIT ME if your conda env name/location differs.
 
 # Slurm copies the submitted batch script to a spool dir on the compute
@@ -23,7 +27,7 @@ cd "$PROJECT_DIR"
 # (which the sbatch scripts sourcing this all set). Relax it just for conda.
 set +u
 source /home/koltona/miniconda3/etc/profile.d/conda.sh
-conda activate alm_env
+conda activate "${ALM_CONDA_ENV:-alm_env}"
 set -u
 
 
