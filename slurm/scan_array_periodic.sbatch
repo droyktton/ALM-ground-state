@@ -72,16 +72,18 @@ mkdir -p slurm/results
 result_file="slurm/results/result_${bc}_L${L}_n${n}.csv"
 
 output=$(python3 run_structure_factor.py -L "$L" -n "$n" --samples "$NSAMPLES" \
-    --qmin 0.015 --qmax 0.15 -c 0.0 --bc "$bc" --no-plot)
+    --qmin 0.001 --qmax 0.15 -c 0.0 --bc "$bc" --no-plot)
 echo "$output"
 
 result_line=$(echo "$output" | grep "^RESULT")
 
+c=$(echo "$result_line"            | grep -oP ' c=\K[0-9.eE+-]+')
+delta=$(echo "$result_line"        | grep -oP 'delta=\K[0-9.eE+-]+')
 zeta_s=$(echo "$result_line"       | grep -oP 'zeta_s=\K[0-9.eE+-]+')
 zeta_s_err=$(echo "$result_line"   | grep -oP 'zeta_s_err=\K[0-9.eE+-]+')
 W2_direct=$(echo "$result_line"    | grep -oP 'W2_direct=\K[0-9.eE+-]+')
 W2_parseval=$(echo "$result_line"  | grep -oP 'W2_parseval=\K[0-9.eE+-]+')
 
-echo "$bc,$L,$n,1.0,1.0,$NSAMPLES,$zeta_s,$zeta_s_err,$W2_direct,$W2_parseval" > "$result_file"
+echo "$bc,$L,$n,$c,$delta,$NSAMPLES,$zeta_s,$zeta_s_err,$W2_direct,$W2_parseval" > "$result_file"
 
 echo "wrote $result_file"
